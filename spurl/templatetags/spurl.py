@@ -5,6 +5,7 @@ from urlobject import URLObject, decode_query
 from django.template.defaulttags import kwarg_re
 from django.utils.datastructures import MultiValueDict
 from django.template import Template, Library, Node, TemplateSyntaxError
+from django.template.base import Variable
 
 
 register = Library()
@@ -20,11 +21,17 @@ def convert_to_boolean(string_or_boolean):
 
 
 def render_template_from_string_without_autoescape(template_string, context):
-    original_autoescape = context.autoescape
-    context.autoescape = False
-    rendered = Template(template_string).render(context)
-    context.autoescape = original_autoescape
-    return rendered
+    # Don't do anything if either parameter or variable is empty
+    template_string = re.sub('{{ *', '{{', template_string)
+    template_string = re.sub(' *}}', '}}', template_string)
+    variable_pattern = '{{([a-zA-Z0-9\._]*)}}'
+    variables = re.findall(variable_pattern, template_string)
+    for variable in variables:
+        var_string = '{{%s}}' % variable
+        resolved_var = Variable(variable).resolve(context)
+        repl_string = str(resolved_var) if resolved_var else ''
+        template_string = template_string.replace(var_string, repl_string)
+    return template_string if len(template_string.split('=')) > 1 else None
 
 
 class SpurlNode(Node):
